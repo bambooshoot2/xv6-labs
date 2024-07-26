@@ -129,7 +129,6 @@ found:
   }
 
   // Allocate a share page
-   // 创建一个 "只读页"，事实上没有创建页，这里只是简化的实现
     if((p->usyscall = (struct usyscall *)kalloc()) == 0){
         freeproc(p);
         release(&p->lock);
