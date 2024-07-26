@@ -4,46 +4,57 @@
 #include "kernel/param.h"
 
 int main(int argc, char* argv[]) {
-    char buf[12];  // 缓冲区用于存储从标准输入读取的行
-    int i = 2;     
-    if (argc < 3) {
-        fprintf(2, "xargs <function> <args>\n");
+   if(argc<2){
+        fprintf(2,"Error:too less paremeters");
         exit(1);
-    }
-    
-    // 创建一个新的参数数组，用于存储要传递给 exec 的参数
-    char* new_argv[MAXARG];
-    new_argv[0] = argv[1];  
-    
-    // 将命令行参数（除了前两个参数）复制到 new_argv 中
-    while (argv[i] != 0) {
-        new_argv[i - 1] = argv[i];
-        if (i > MAXARG - 1) {
-            fprintf(2, "too many args\n");
-            exit(1);
-        }
-        i++;
-    }
-    new_argv[i] = 0;  // 设置参数数组的结束标志
+   }
 
-    char c, *p = buf;
-    // 从标准输入读取字符直到 EOF
-    while (read(0, &c, 1) != 0) {
-        if (c == '\n') {
-            // 如果读取到换行符，将 buf 末尾添加终止符 '\0'
-            *p = '\0';
-            new_argv[i - 1] = buf;  // 将 buf 作为最后一个参数传递给 exec
-            if (fork() == 0) {
-                // 子进程执行命令
-                exec(new_argv[0], new_argv);
-                exit(0);  
-            }
-            wait(0);  // 等待子进程完成
-            p = buf;  // 重置缓冲区指针
-        } else {
-            *p++ = c;  // 将读取到的字符存储到 buf 中
-        }
+    int i;
+    int pNumber=0; // 参数数量
+    char* p[MAXARG];    // 参数数组
+    // 从第二个参数开始 拷贝到p数组中
+    for (i=1;i<argc;++i){
+        p[pNumber++]=argv[i];
     }
-    
-    exit(0);  // 程序正常退出
+
+    int place = pNumber;
+    char ch;
+    char *line;
+    char s[512];
+    line=s;// line为指向缓冲区的指针
+    int index=0;    // 当前字符索引
+    // 读取标准输入中的参数
+    while(read(0,&ch,1)>0){
+        if(ch=='\n'){
+            // 读到换行符则将参数加入命令中
+            line[index]='\0';
+            index=0;
+            p[pNumber++]=line;
+            p[pNumber]=0;
+            // 创建子进程
+            if(fork()){
+                wait(0);
+                pNumber=place;
+            }
+            else{
+                // 子进程执行命令
+                exec(argv[1],p);
+            }
+        }
+        else if (ch==' ')
+        { 
+            // 空格表示当前参数结束
+            line[index]='\0'; 
+            index=0; 
+            p[pNumber++]=line; 
+            char s[512]; 
+            line=s;
+        }
+        else{
+            // 加入到缓冲区中
+            line[index++]=ch;
+        }
+        
+    }
+    exit(0);
 }

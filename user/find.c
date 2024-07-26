@@ -1,100 +1,84 @@
 #include "kernel/types.h"
-#include "user/user.h"
 #include "kernel/stat.h"
+#include "user/user.h"
 #include "kernel/fs.h"
 
-// find 函数
-void
-search(char *dir, char *file)
-{   
+void find(char *path , char *target)
+{
     char buf[512], *p;
     int fd;
-    // 声明与文件相关的结构体
+    // 定义目录结构体和文件描述符结构体
     struct dirent de;
     struct stat st;
 
-    // open() 函数打开路径，返回一个文件描述符，如果错误返回 -1
-    if ((fd = open(dir, 0)) < 0)
-    {
-        fprintf(2, "find: cannot open %s\n", dir);
+    // 首先打开目录文件
+    if((fd = open(path, 0)) < 0){
+        fprintf(2, "find: cannot open %s\n", path);
         return;
     }
 
-    
-    if (fstat(fd, &st) < 0)
-    {
-        fprintf(2, "find: cannot stat %s\n", dir);
+    if(fstat(fd, &st) < 0){
+        fprintf(2, "find: cannot stat %s\n", path);
         close(fd);
         return;
     }
 
-    // 如果不是目录类型
-    if (st.type != T_DIR)
+    // 根据文件类型查找
+    switch(st.type)
     {
-        fprintf(2, "find: %s is not a directory\n", dir);
-        close(fd);
-        return;
-    }
+        
+        case T_FILE:
+            // 定位到path的最后 和target进行比较
+            if(strcmp( path + strlen(path) - strlen(target) , target ) ==0)
+            {
+                 printf("%s\n", path);
+            }
+            break;
 
-    // 如果路径过长放不入缓冲区，则报错提示
-    if(strlen(dir) + 1 + DIRSIZ + 1 > sizeof buf)
-    {
-        fprintf(2, "find: directory too long\n");
-        close(fd);
-        return;
-    }
+        case T_DIR:
+            // 设置是否能放进缓冲区
+            if(strlen(path) + 1 + DIRSIZ + 1 > sizeof buf){
+                printf("find: path too long\n");
+                break;
+            }
+            strcpy(buf, path);
+            // 构建路径
+            p = buf+strlen(buf);
+            *p++ = '/';
 
-    // 将 dir 指向的字符串即绝对路径复制到 buf
-    strcpy(buf, dir);
-    p = buf + strlen(buf);
-    *p++ = '/';
-    // 读取 fd ，如果 read 返回字节数与 de 长度相等则循环
-    while (read(fd, &de, sizeof(de)) == sizeof(de))
-    {
-        if(de.inum == 0)
-            continue;
-        if (!strcmp(de.name, ".") || !strcmp(de.name, ".."))
-            continue;
-        // memmove，把 de.name 信息复制 p，其中 de.name 代表文件名
-        memmove(p, de.name, DIRSIZ);
-        // 设置文件名结束符
-        p[DIRSIZ] = 0;
-        // int stat(char *, struct stat *);
-        // stat 系统调用，可以获得一个已存在文件的模式，并将此模式赋值给它的副本
-        // stat 以文件名作为参数，返回文件的 i 结点中的所有信息
-        // 如果出错，则返回 -1
-        if(stat(buf, &st) < 0)
-        {
-            // 出错则报错
-            fprintf(2, "find: cannot stat %s\n", buf);
-            continue;
-        }
-        // 如果是目录类型，递归查找
-        if (st.type == T_DIR)
-        {
-            search(buf, file);
-        }
-        // 如果是文件类型 并且 名称与要查找的文件名相同
-        else if (st.type == T_FILE && !strcmp(de.name, file))
-        {
-            // 打印缓冲区存放的路径
-            printf("%s\n", buf);
-        } 
-    }
+            while(read(fd, &de, sizeof(de)) == sizeof(de))
+            {
+                if(de.inum == 0)
+                    continue;
+                memmove(p, de.name, DIRSIZ);
+                p[DIRSIZ] = 0;
+                if(stat(buf, &st) < 0)
+                {
+                    printf("find: cannot stat %s\n", buf);
+                    continue;
+                }
+
+                // 忽略'.'和'..'的文件夹
+                if(strcmp(".", de.name) != 0 && strcmp("..", de.name) != 0)
+                {
+                    find(buf, target);
+                }
+            }
+            break;
+  }
+  close(fd);
+
 }
 
-int
-main(int argc, char *argv[])
+
+int main(int argc, char *argv[])
 {
-    
-    if (argc != 3)
+    if(argc != 3)
     {
-        fprintf(2, "usage: find dirName fileName\n");
+        printf("input arguments : find <path> <file name>\n");
         exit(1);
     }
-
-    // 调用 find 函数查找指定目录下的文件
-    search(argv[1], argv[2]);
-    // 正常退出
+   
+    find(argv[1], argv[2]);
     exit(0);
 }
