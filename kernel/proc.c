@@ -281,6 +281,7 @@ fork(void)
     return -1;
   }
 
+  
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
     freeproc(np);
@@ -314,6 +315,9 @@ fork(void)
   acquire(&np->lock);
   np->state = RUNNABLE;
   release(&np->lock);
+
+  np->mask=p->mask;
+
 
   return pid;
 }
@@ -654,3 +658,27 @@ procdump(void)
     printf("\n");
   }
 }
+
+// Return the number of processes whose state is not UNUSED
+uint64
+nproc(void)
+{
+  struct proc *p;
+  uint64 num = 0;
+  // 在进程表中查找所有进程
+  for (p = proc; p < &proc[NPROC]; p++)
+  {
+    // add lock
+    acquire(&p->lock);
+    // 进程为活跃
+    if (p->state != UNUSED)
+    {
+      
+      num++;
+    }
+    // release lock
+    release(&p->lock);
+  }
+  return num;
+}
+
