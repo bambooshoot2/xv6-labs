@@ -83,14 +83,17 @@ sys_pgaccess(void)
   // lab pgtbl: your code here.
     uint64 va,dst;
     int n;
+    // 从用户输入中读取
     if(argint(1, &n) < 0 || argaddr(0, &va) < 0 || argaddr(2, &dst) < 0)
         return -1;
     if(n > 64 || n < 0)
         return -1;
     uint64 bitmask = 0,mask = 1;
     pte_t *pte;
+    // 当前进程的页表
     pagetable_t pagetable = myproc()->pagetable;
     while(n > 0){
+      // 遍历
         pte = walk(pagetable,va,1);
         if(pte){
             if(*pte & PTE_A)
