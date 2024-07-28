@@ -75,7 +75,19 @@ usertrap(void)
 
   if(p->killed)
     exit(-1);
+  // lab4-3
+  if(which_dev == 2){   //引发时钟中断
+    // 每当到达一个interval就调用handler函数
+    if(p->interval != 0 && ++p->passedticks == p->interval){
+      // 使用trapframe后面地址的内存 只要在trapframe后面 不要覆盖即可
+      p->trapframecopy=p->trapframe+512;
+      // 把frame复制到副本中
+      memmove(p->trapframecopy,p->trapframe,sizeof(struct trapframe));
+      p->trapframe->epc = p->handler;   // 需要更换地址而不是直接调用 
+    }
+  }
 
+                      
   // give up the CPU if this is a timer interrupt.
   if(which_dev == 2)
     yield();
