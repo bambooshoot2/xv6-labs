@@ -65,7 +65,17 @@ usertrap(void)
     intr_on();
 
     syscall();
-  } else if((which_dev = devintr()) != 0){
+  }
+  else if(r_scause() == 15){  
+    // This is "store page fault", because I want write a page without PTE_W  
+    uint64 fault_va = r_stval();
+    if(fault_va > p->sz ||
+       is_cowpage(p->pagetable, fault_va) < 0 ||
+       cow_alloc(p->pagetable, PGROUNDDOWN(fault_va)) == 0
+    )
+    p->killed = 1;
+  }
+  else if((which_dev = devintr()) != 0){
     // ok
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
@@ -218,3 +228,58 @@ devintr()
   }
 }
 
+// 增加判断是否为cowpage的函数
+int 
+is_cowpage(pagetable_t pagetable, uint64 va) 
+{
+  pte_t* pte = walk(pagetable, va, 0);
+  return (*pte & PTE_COW ? 0 : -1);
+}
+
+
+void*
+cow_alloc(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte = walk(pagetable, va, 0);
+  uint64 pa = PTE2PA(*pte);
+
+  // 只有一个进程使用 将pte设置为可写 然后将cow设置为无效
+  if(get_refcount(pa) == 1){
+    *pte |= PTE_W;
+    *pte &= ~PTE_COW;
+    return (void*)pa;
+  }
+
+  // ref_count>=2 有一个以上的引用
+  uint flags;
+  char *new_mem;
+  // 重新设置pte_w
+  *pte |= PTE_W;
+  flags = PTE_FLAGS(*pte);
+  
+  // 分配新的物理内存并拷贝 重新映射
+  pa = PTE2PA(*pte);
+  new_mem = kalloc();
+
+  // 无内存 kill进程
+  if(new_mem == 0)
+    return 0;
+
+  // 进行拷贝
+  memmove(new_mem, (char*)pa, PGSIZE);
+  // 重新映射页面前清除PTE_V以免remap
+  *pte &= ~PTE_V;
+
+   /* 将新分配的页面映射到虚拟地址 va */
+  if(mappages(pagetable, va, PGSIZE, (uint64)new_mem, flags) != 0){
+   /* 如果映射失败，重新设置 PTE_V，并释放新分配的内存 */
+    *pte |= PTE_V;
+    kfree(new_mem);
+    return 0;
+  }
+
+ /* 减少旧页面的引用计数 */
+  kfree((char*)PGROUNDDOWN(pa));
+
+  return new_mem;
+}
